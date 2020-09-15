@@ -7,26 +7,38 @@ import os
 from os import listdir
 from os.path import isfile, join
 
-solidline_mask_list = []
-dashedline_mask_list = []
 
 JSON_DIR = "../data/jsons"
-solid_line_masks_DIR = "../data/masks/solid_line_masks"
-dashed_line_masks_DIR = "../data/masks/dashed_line_masks"
+MASK_DIR = "../data/masks"
+
+lanes_mask_list = []
+blue = (255,0,0)
+green = (0,255,0)
+red = (0,0,255)
 
 def clean_TypeName(_name):
     pattern = r"\.[0-9a-z].*"
     name = re.sub(pattern, '', _name)
     return name
 
-class LaneMask(object):
-    def __init__(self, width, height, points, name, line_type):
-        self.width = width
-        self.height = height
+class ColoredPoints(object):
+    color = (0,0,0)
+    def __init__(self, points, line_type):
         self.points = []
         self.points.append(points)
+        if (line_type == "Solid Line"):
+            self.color = red
+        elif (line_type == "Dashed Line"):
+            self.color = green
+
+
+
+class LaneMask(object):
+    def __init__(self, width, height, rgb_points:ColoredPoints, name):
+        self.width = width
+        self.height = height
+        self.rgb_points = rgb_points
         self.name = clean_TypeName(name)
-        self.line_type = line_type
 
 def read_jsons():
     json_file_names = [f for f in listdir(JSON_DIR) if isfile(join(JSON_DIR, f))]
@@ -39,49 +51,45 @@ def read_jsons():
         height = json_dict["size"]["height"]
         json_objs = json_dict["objects"]
 
-        solid_line_count = 0
-        dashed_line_count = 0
+        line_count = 0
+        obj_points_list = []
 
         for obj in json_objs:
             if obj["classTitle"] == "Solid Line":
-                solid_line_count += 1
+                line_count += 1
                 points = obj["points"]["exterior"]
-                if (solid_line_count > 1):
-                    solid_line.points.append(points)
-                else:
-                    solid_line = LaneMask(width, height, points, file_name, "solid")
+                solid_rgb_points = ColoredPoints(points, "Solid Line")
+                obj_points_list.append(solid_rgb_points)
+
             elif obj["classTitle"] == "Dashed Line":
-                dashed_line_count += 1
+                line_count += 1
                 points = obj["points"]["exterior"]
-                if (dashed_line_count > 1):
-                    dashed_line.points.append(points)
-                else:
-                    dashed_line = LaneMask(width, height, points, file_name, "dashed")
+                dashed_rgb_points = ColoredPoints(points, "Dashed Line")
+                obj_points_list.append(dashed_rgb_points)
 
-        if (solid_line_count == 0):
-            solid_line = LaneMask(width, height, [], file_name, "solid")
-        if (dashed_line_count == 0):
-            dashed_line = LaneMask(width, height, [], file_name, "dashed")
-
-        solidline_mask_list.append(solid_line)
-        dashedline_mask_list.append(dashed_line)
+        if (line_count > 0):
+            lanes = LaneMask(width, height, obj_points_list, file_name)
+            lanes_mask_list.append(lanes)
+        else:
+            empty_rgb_points = ColoredPoints([], "No Line")
+            obj_points_list = empty_rgb_points
+            lanes = LaneMask(width, height, obj_points_list, file_name)
+            lanes_mask_list.append(lanes)
 
 def draw_and_save_line(_LaneMask:LaneMask):
     mask = np.zeros((_LaneMask.height, _LaneMask.width, 3), np.uint8)
-    points_list = _LaneMask.points
+    rgb_points_list = _LaneMask.rgb_points
     isClosed = False
-    color = (255, 255, 255) #white
     thickness = 2
 
-    for points in points_list:
-        pts = np.array(points, np.int32)
+    for rgb_points in rgb_points_list:
+        color = rgb_points.color
+        pts = np.array(rgb_points.points, np.int32)
         pts = pts.reshape((-1,1,2))
         image = cv2.polylines(mask, [pts], isClosed, color, thickness) 
 
-    if(_LaneMask.line_type == "solid"):
-        cv2.imwrite(join(solid_line_masks_DIR,_LaneMask.name + "_solid_mask.png"),image)
-    elif (_LaneMask.line_type == "dashed"):
-        cv2.imwrite(join(dashed_line_masks_DIR, _LaneMask.name + "_dashed_mask.png"),image)
+    cv2.imwrite(join(MASK_DIR,_LaneMask.name + "_mask.png"),image)
+        
 
 
 if __name__ == '__main__':
@@ -91,13 +99,9 @@ if __name__ == '__main__':
     print("read jsons: ", (end - start) / 60)
         
     start = time.time()
-    for solid_mask in solidline_mask_list:
-        draw_and_save_line(solid_mask)
+    for mask in lanes_mask_list:
+        draw_and_save_line(mask)
     end = time.time()
-    print("draw solid masks: ", (end - start) / 60)
+    print("masks: ", (end - start) / 60)
 
-    start = time.time()
-    for dashed_mask in dashedline_mask_list:
-        draw_and_save_line(dashed_mask)
-    end = time.time()
-    print("draw dashed masks: ", (end - start) / 60)
+
