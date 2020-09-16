@@ -12,6 +12,7 @@ JSON_DIR = "../data/jsons"
 MASK_DIR = "../data/masks"
 
 lanes_mask_list = []
+black = (0,0,0)
 blue = (255,0,0)
 green = (0,255,0)
 red = (0,0,255)
@@ -30,8 +31,8 @@ class ColoredPoints(object):
             self.color = red
         elif (line_type == "Dashed Line"):
             self.color = green
-
-
+        else:
+            self.color = black
 
 class LaneMask(object):
     def __init__(self, width, height, rgb_points:ColoredPoints, name):
@@ -72,15 +73,16 @@ def read_jsons():
             lanes_mask_list.append(lanes)
         else:
             empty_rgb_points = ColoredPoints([], "No Line")
-            obj_points_list = empty_rgb_points
-            lanes = LaneMask(width, height, obj_points_list, file_name)
-            lanes_mask_list.append(lanes)
+            obj_points_list.append(empty_rgb_points)
+            empt_lanes = LaneMask(width, height, obj_points_list, file_name)
+            lanes_mask_list.append(empt_lanes)
+            print("empty mask: ",file_name)
 
 def draw_and_save_line(_LaneMask:LaneMask):
     mask = np.zeros((_LaneMask.height, _LaneMask.width, 3), np.uint8)
     rgb_points_list = _LaneMask.rgb_points
     isClosed = False
-    thickness = 2
+    thickness = 5
 
     for rgb_points in rgb_points_list:
         color = rgb_points.color
